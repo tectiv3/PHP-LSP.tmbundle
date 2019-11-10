@@ -1,0 +1,222 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>beforeRunningCommand</key>
+	<string>nop</string>
+	<key>command</key>
+	<string>#!/usr/bin/env ruby18
+
+libdir = ENV['TM_BUNDLE_SUPPORT'] + '/lib/'
+$LOAD_PATH.unshift(libdir) unless $LOAD_PATH.include?(libdir)
+require ENV['TM_BUNDLE_SUPPORT'] + '/lib/json'
+
+require 'net/http'
+
+require ENV['TM_SUPPORT_PATH'] + "/lib/ui.rb"
+require ENV['TM_SUPPORT_PATH'] + "/lib/escape.rb"
+require ENV['TM_SUPPORT_PATH'] + "/lib/exit_codes.rb"
+require ENV['TM_SUPPORT_PATH'] + "/lib/web_preview"
+require ENV['TM_SUPPORT_PATH'] + "/lib/tm/htmloutput.rb"
+
+def did_open(file)
+    document = []
+    while line = $stdin.gets
+      document.push(line)
+    end
+    uri = URI('http://127.0.0.1:8787/')
+    http = Net::HTTP.new(uri.host, uri.port)
+    req = Net::HTTP::Post.new(uri.path, 'Content-Type' =&gt; 'application/json')
+    req.body = {'method' =&gt; 'didOpen', 'body' =&gt; { 'uri' =&gt; "file://" + file, 
+        "languageId" =&gt; "php", "text" =&gt; document.join}}.to_json
+    res = http.request(req)
+    json = JSON.parse res.body
+    if json['result'] == "error"
+      TextMate.exit_show_tool_tip(json['message'])
+    end
+rescue =&gt; e
+    return "failed #{e}"
+end
+
+def get_completion(file, line, char, last_char)
+    did_open(file)
+    uri = URI('http://127.0.0.1:8787/')
+    http = Net::HTTP.new(uri.host, uri.port)
+    req = Net::HTTP::Post.new(uri.path, 'Content-Type' =&gt; 'application/json')
+    req.body = {'method' =&gt; 'completion', 'body' =&gt; { 'textDocument' =&gt; { 'uri' =&gt; "file://" + file}, 'position' =&gt; {'line' =&gt; line, 'character' =&gt; char}, 'context' =&gt; { 'triggerKind' =&gt; 1 }}}.to_json
+    res = http.request(req)
+    json = JSON.parse res.body
+    result = json['result']
+    if result == "error"
+      TextMate.exit_show_tool_tip(json['message'])
+    end
+    if !result
+      return []
+    end
+    return result['items']
+rescue =&gt; e
+    return "failed #{e}"
+end
+word = ENV['TM_CURRENT_WORD'] || ""
+word = "&gt;" if word == "-&gt;"
+
+result = get_completion(ENV['TM_FILEPATH'], ENV['TM_LINE_NUMBER'].to_i-1, ENV['TM_LINE_INDEX'].to_i-1, word)
+TextMate.exit_show_tool_tip("No completions found.") if result.length == 0
+
+# set up images for use by DIALOG
+# this probably should be done only once, somehow.
+icon_plist = "{ " + [ "const", "func", "package", "type", "var" ].map { |v| 
+  "#{v} = '#{ENV['TM_BUNDLE_SUPPORT']}/icons/#{v}.pdf';"
+}.join(" ") + " }"
+system( ENV['DIALOG'], "images", "--register", icon_plist )
+
+def get_image_name(type) 
+  # namespace CompletionItemKind {
+  #   Text = 1;
+  #   Method = 2;
+  #   Function = 3;
+  #   Constructor = 4;
+  #   Field = 5;
+  #   Variable = 6;
+  #   Class = 7;
+  #   Interface = 8;
+  #   Module = 9;
+  #   Property = 10;
+  #   Unit = 11;
+  #   Value = 12;
+  #   Enum = 13;
+  #   Keyword = 14;
+  #   Snippet = 15;
+  #   Color = 16;
+  #   File = 17;
+  #   Reference = 18;
+  #   Folder = 19;
+  #   EnumMember = 20;
+  #   Constant = 21;
+  #   Struct = 22;
+  #   Event = 23;
+  #   Operator = 24;
+  #   TypeParameter = 25;
+  # }
+  case type
+  when 1
+    return 'const'
+  when 21
+    return 'const'
+  when 2..4
+    return 'func'
+  when 5..6
+    return 'var'
+  when 10
+    return 'var'
+  when 7..9
+    return 'type'
+  when 11
+    return 'type'
+  when 17..19
+    return 'package'
+  else
+    return ''
+  end
+end
+
+# helper function to build the choice hash
+def make_completion_hash(line)
+  def depth_at_i(sig)
+    depths = Array.new
+    depth = 0
+    sig.chars { |ch|
+      depth-=1 if ch == ")"
+      depths &lt;&lt; depth
+      depth+=1 if ch == "("
+    }
+    return depths
+  end
+  def get_f_args(sig)
+    if sig.index("(") == nil
+      return sig
+    end
+    depths = depth_at_i(sig)
+    pos = sig.index(")")
+    while pos != nil &amp;&amp; depths[pos] &gt; 0
+      pos = sig.index(")", pos+1)
+    end
+    return sig[ Range.new(sig.index("(")+1, pos - 1) ]
+  end
+  def split_args(sig)
+    args = Array.new
+    depths = depth_at_i(sig)
+    start = 0
+    pos = sig.index(",")
+
+    while pos != nil
+      if depths[pos] == 0
+        args &lt;&lt; sig[ Range.new(start, pos-1) ]
+        start = pos+1
+      end
+      pos = sig.index(",", pos+1)
+    end
+
+    lastarg = sig[ Range.new(start, sig.length) ].strip
+    args &lt;&lt; lastarg unless lastarg == ""
+    return args
+  end
+  word = ENV['TM_CURRENT_WORD'] || ""
+  match = line['sortText']
+  image = get_image_name(line['kind'])
+
+  display = image == "func" ? (line['detail'] || line['label']) : line['label']
+  display = " " + (display == "" ? line['label'] : display)
+
+  insert = line['textEdit']['newText']
+  insert = insert[word.size..-1] if insert.start_with?(word)
+  insert = insert[match.size..-1] if insert.start_with?(match)
+  # puts insert
+  # TextMate.exit_show_tool_tip(insert)
+  # exit
+  full = insert
+  if image == "func"
+    i = 0
+    insert.sub! '$0', ''
+    args = split_args(get_f_args( display )).map { |v| "${#{i += 1}:"+e_snp(v)+"}" }.join(", ")
+    full[0..-2] += args
+    full += ";$0"
+    insert += ";$0"
+  end
+  # TextMate.exit_show_tool_tip({ 'match' =&gt; match, 'display' =&gt; display, 'insert' =&gt; insert, 'image' =&gt; image })
+  return { 'match' =&gt; match, 'display' =&gt; display, 'insert' =&gt; insert, 'image' =&gt; image, 'full' =&gt; full  }
+end
+
+# build the list of completion choices.
+hash = result.collect { |v| make_completion_hash( v ) }
+options = {:extra_chars =&gt; "_",  :case_insensitive =&gt; false }
+
+# if there is only one match, insert. no need to show the menu
+if hash.length == 1
+  TextMate.exit_insert_snippet( hash[0]['full'] )
+end
+      # TextMate.exit_show_tool_tip(hash)
+TextMate::UI.complete(hash, options )
+</string>
+	<key>input</key>
+	<string>document</string>
+	<key>inputFormat</key>
+	<string>text</string>
+	<key>keyEquivalent</key>
+	<string>~	</string>
+	<key>name</key>
+	<string>Complete</string>
+	<key>outputCaret</key>
+	<string>afterOutput</string>
+	<key>outputFormat</key>
+	<string>text</string>
+	<key>outputLocation</key>
+	<string>atCaret</string>
+	<key>scope</key>
+	<string>source.php</string>
+	<key>uuid</key>
+	<string>9C150957-92ED-4785-A7D0-C7428E938968</string>
+	<key>version</key>
+	<integer>2</integer>
+</dict>
+</plist>

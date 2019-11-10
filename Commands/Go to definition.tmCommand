@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>beforeRunningCommand</key>
+	<string>nop</string>
+	<key>command</key>
+	<string>#!/usr/bin/env ruby
+
+#require "#{ENV['TM_BUNDLE_SUPPORT']}/phplsp"
+#LSP::godef
+
+require 'net/http'
+require 'json'
+
+require ENV['TM_SUPPORT_PATH'] + '/lib/textmate'
+require ENV['TM_SUPPORT_PATH'] + '/lib/ui'
+require ENV['TM_SUPPORT_PATH'] + '/lib/exit_codes'
+require ENV['TM_SUPPORT_PATH'] + '/lib/tm/save_current_document'
+
+def did_open(file)
+    document = []
+    while line = $stdin.gets
+      document.push(line)
+    end
+    uri = URI('http://127.0.0.1:8787/')
+    http = Net::HTTP.new(uri.host, uri.port)
+    req = Net::HTTP::Post.new(uri.path, 'Content-Type' =&gt; 'application/json')
+    req.body = {'method' =&gt; 'didOpen', 'body' =&gt; { 'uri' =&gt; "file://" + file, 
+        "languageId" =&gt; "php", "text" =&gt; document.join}}.to_json
+    res = http.request(req)
+    json = JSON.parse res.body
+    if json['result'] == "error"
+      TextMate.exit_show_tool_tip(json['message'])
+    end
+rescue =&gt; e
+    return "failed #{e}"
+end
+
+def get_location(file, line, char)
+    did_open(file)
+    uri = URI('http://127.0.0.1:8787/')
+    http = Net::HTTP.new(uri.host, uri.port)
+    req = Net::HTTP::Post.new(uri.path, 'Content-Type' =&gt; 'application/json')
+    req.body = {method: 'definition', body: {textDocument: { uri: "file://" + file}, position: {line: line, character: char}}}.to_json
+    res = http.request(req)
+    json = JSON.parse res.body
+    result = json['result']
+    if result == "error"
+      return json['message']
+    end
+    file = (result['uri'].sub! 'file://', '')
+    return TextMate.go_to(:file =&gt; file,
+                   :line =&gt; result['range']['start']['line']+1,
+                   :column =&gt; result['range']['start']['character']+1)
+rescue =&gt; e
+    return "failed #{e}"
+end
+
+TextMate.save_if_untitled('php')
+
+result = get_location(ENV['TM_FILEPATH'], ENV['TM_LINE_NUMBER'].to_i-1, ENV['TM_LINE_INDEX'].to_i-1)
+
+TextMate.exit_show_tool_tip(result)</string>
+	<key>input</key>
+	<string>selection</string>
+	<key>inputFormat</key>
+	<string>text</string>
+	<key>keyEquivalent</key>
+	<string>@D</string>
+	<key>name</key>
+	<string>Go to Definition</string>
+	<key>outputCaret</key>
+	<string>afterOutput</string>
+	<key>outputFormat</key>
+	<string>text</string>
+	<key>outputLocation</key>
+	<string>toolTip</string>
+	<key>scope</key>
+	<string>source.php</string>
+	<key>uuid</key>
+	<string>167F2E72-602D-43A5-93EB-EF5FC4042BEF</string>
+	<key>version</key>
+	<integer>2</integer>
+</dict>
+</plist>

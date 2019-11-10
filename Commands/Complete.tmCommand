@@ -1,0 +1,174 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>beforeRunningCommand</key>
+	<string>nop</string>
+	<key>command</key>
+	<string>#!/usr/bin/env ruby -wU
+
+require 'net/http'
+require 'json'
+
+# SUPPORT = ENV['TM_SUPPORT_PATH']
+# DIALOG = SUPPORT + '/bin/tm_dialog'
+#
+# require SUPPORT + '/lib/escape'
+# require SUPPORT + '/lib/osx/plist'
+
+# require ENV['TM_BUNDLE_SUPPORT'] + '/lib/php.rb'
+require ENV['TM_SUPPORT_PATH'] + '/lib/ui'
+require ENV['TM_SUPPORT_PATH'] + '/lib/exit_codes'
+
+def did_open(file)
+    document = []
+    while line = $stdin.gets
+      document.push(line)
+    end
+    uri = URI('http://127.0.0.1:8787/')
+    http = Net::HTTP.new(uri.host, uri.port)
+    req = Net::HTTP::Post.new(uri.path, 'Content-Type' =&gt; 'application/json')
+    req.body = {'method' =&gt; 'didOpen', 'body' =&gt; { 'uri' =&gt; "file://" + file, 
+        "languageId" =&gt; "php", "text" =&gt; document.join}}.to_json
+    res = http.request(req)
+    json = JSON.parse res.body
+    if json['result'] == "error"
+      TextMate.exit_show_tool_tip(json['message'])
+    end
+rescue =&gt; e
+    return "failed #{e}"
+end
+
+def get_definition(file, line, char)
+    did_open(file)
+    uri = URI('http://127.0.0.1:8787/')
+    http = Net::HTTP.new(uri.host, uri.port)
+    req = Net::HTTP::Post.new(uri.path, 'Content-Type' =&gt; 'application/json')
+    req.body = {method: 'hover', body: {textDocument: { uri: "file://" + file}, position: {line: line, character: char}}}.to_json
+    res = http.request(req)
+    json = JSON.parse res.body
+    if json['result'] == "error"
+      tip = json['message']
+    else
+      tip = ''
+      IO.popen('"$TM_SUPPORT_PATH/bin/Markdown.pl"|"$TM_SUPPORT_PATH/bin/SmartyPants.pl"', "r+") do |io|
+        io &lt;&lt; json['result']['contents']['value']
+        io.close_write
+        io.each_line do |line|
+          tip &lt;&lt; line
+        end
+      end
+    end
+    return tip
+rescue =&gt; e
+    return "failed #{e}"
+end
+
+class String
+  def nbsp
+    gsub(' ', '&amp;nbsp;')
+  end
+end
+
+def show_function_and_exit(function, line = nil)
+  return unless function =~ /^[A-Za-z_][A-Za-z0-9_]*$/
+  functions = `grep -i '^#{function}%' "#{$fnFilename}"`.split("\n")
+  
+  if functions.size == 1
+    function, prototype, description = functions.pop.split('%')
+
+    function = PHPFunction.new(prototype)
+
+    params = function.params.map do |param|
+     html = ''
+     html &lt;&lt; '&lt;span class="type"&gt;' + param[:type] + '&lt;/span&gt; '.nbsp unless param[:type].to_s.empty?
+     html &lt;&lt; param[:name]
+     unless param[:default].to_s.empty?
+       html &lt;&lt; ' = '.nbsp + param[:default]
+     end
+     html = '&lt;i&gt;[' + html + ']&lt;/i&gt;' if param[:optional]
+     html
+    end
+
+    if line
+      arg = 0
+      depth = 0
+      line.reverse.each_byte do |char|
+        if char == ?, and depth == 0
+          arg += 1
+        elsif char == ?(
+          depth -= 1 if depth &gt; 0
+        elsif char == ?)
+          depth += 1
+        end
+      end
+      if arg &lt; params.size
+        params[arg] = '&lt;b&gt;' + params[arg] + '&lt;/b&gt;'
+      elsif not params.empty?
+        params[-1] = '&lt;b&gt;' + params[-1] + '&lt;/b&gt;'
+      end
+    end
+    prototype = '&lt;span class="type"&gt;' + function.type + '&lt;/span&gt; &lt;span&gt;'.nbsp + function.name + '&lt;/span&gt;(' + params.join(', '.nbsp) + ')'
+    tip = &lt;&lt;-HTML
+      &lt;style type="text/css" media="screen"&gt;
+          p {
+              margin: 0;
+          }
+          p.prototype span {
+              color: #00008B;
+          }
+          p.prototype i {
+              color: #666;
+          }
+          p.description {
+              font-size: smaller;
+          }
+          p.prototype span.type {
+            color: #006400;
+          }
+      &lt;/style&gt;
+      &lt;p class="prototype"&gt;#{prototype}&lt;/p&gt;
+      &lt;p class="description"&gt;#{description}&lt;/p&gt;
+    HTML
+    TextMate::UI.tool_tip tip, :format =&gt; :html
+    exit
+  end
+end
+
+# function = nil
+
+# show_function_and_exit(function = ENV['TM_CURRENT_WORD'].to_s)
+result = get_definition(ENV['TM_FILEPATH'], ENV['TM_LINE_NUMBER'].to_i-1, ENV['TM_LINE_INDEX'].to_i-1)
+
+# prefix = ENV['TM_CURRENT_LINE'][0..ENV['TM_LINE_INDEX'].to_i].reverse
+if result.length
+  # TextMate.exit_show_tool_tip result
+  result.sub! "&lt;code&gt;php", "&lt;pre&gt;"
+  result.sub! "&lt;/code&gt;", "&lt;/pre&gt;"
+  TextMate::UI.tool_tip result, :format =&gt; :html
+  exit
+end
+
+TextMate.exit_show_tool_tip "Definition not found"</string>
+	<key>input</key>
+	<string>selection</string>
+	<key>inputFormat</key>
+	<string>text</string>
+	<key>keyEquivalent</key>
+	<string>^</string>
+	<key>name</key>
+	<string>Show definition</string>
+	<key>outputCaret</key>
+	<string>afterOutput</string>
+	<key>outputFormat</key>
+	<string>html</string>
+	<key>outputLocation</key>
+	<string>newWindow</string>
+	<key>scope</key>
+	<string>source.php</string>
+	<key>uuid</key>
+	<string>8BDB58A3-937F-479A-B4DB-691CECE83040</string>
+	<key>version</key>
+	<integer>2</integer>
+</dict>
+</plist>
