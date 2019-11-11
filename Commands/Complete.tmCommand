@@ -10,26 +10,45 @@
 require 'net/http'
 require 'json'
 
-# SUPPORT = ENV['TM_SUPPORT_PATH']
-# DIALOG = SUPPORT + '/bin/tm_dialog'
-#
-# require SUPPORT + '/lib/escape'
-# require SUPPORT + '/lib/osx/plist'
+SUPPORT = ENV['TM_SUPPORT_PATH']
+DIALOG = SUPPORT + '/bin/tm_dialog'
 
-# require ENV['TM_BUNDLE_SUPPORT'] + '/lib/php.rb'
+require SUPPORT + '/lib/escape'
+require SUPPORT + '/lib/osx/plist'
+
+require ENV['TM_BUNDLE_SUPPORT'] + '/lib/php.rb'
 require ENV['TM_SUPPORT_PATH'] + '/lib/ui'
 require ENV['TM_SUPPORT_PATH'] + '/lib/exit_codes'
 
+def initialize_project()
+  dir = ENV['TM_PROJECT_DIRECTORY']
+  uri = URI('http://127.0.0.1:8787/')
+  http = Net::HTTP.new(uri.host, uri.port)
+  req = Net::HTTP::Post.new(uri.path, 'Content-Type' =&gt; 'application/json')
+  req.body = { 'method' =&gt; 'initialize', 'body' =&gt; { 'dir' =&gt; dir, 
+      'storage' =&gt; "/tmp/intelephense/" }}.to_json
+  res = http.request(req)
+  json = JSON.parse res.body
+  if json['result'] == "error"
+    TextMate.exit_show_tool_tip(json['message'])
+  end
+end
+
 def did_open(file)
+    initialize_project()
     document = []
     while line = $stdin.gets
       document.push(line)
+    end
+    text = document.join
+    if text.length &gt; 1000000
+      TextMate.exit_show_tool_tip("File is too big, ignoring...")
     end
     uri = URI('http://127.0.0.1:8787/')
     http = Net::HTTP.new(uri.host, uri.port)
     req = Net::HTTP::Post.new(uri.path, 'Content-Type' =&gt; 'application/json')
     req.body = {'method' =&gt; 'didOpen', 'body' =&gt; { 'uri' =&gt; "file://" + file, 
-        "languageId" =&gt; "php", "text" =&gt; document.join}}.to_json
+        "languageId" =&gt; "php", "text" =&gt; text}}.to_json
     res = http.request(req)
     json = JSON.parse res.body
     if json['result'] == "error"
@@ -70,86 +89,105 @@ class String
   end
 end
 
-def show_function_and_exit(function, line = nil)
-  return unless function =~ /^[A-Za-z_][A-Za-z0-9_]*$/
-  functions = `grep -i '^#{function}%' "#{$fnFilename}"`.split("\n")
-  
-  if functions.size == 1
-    function, prototype, description = functions.pop.split('%')
-
-    function = PHPFunction.new(prototype)
-
-    params = function.params.map do |param|
-     html = ''
-     html &lt;&lt; '&lt;span class="type"&gt;' + param[:type] + '&lt;/span&gt; '.nbsp unless param[:type].to_s.empty?
-     html &lt;&lt; param[:name]
-     unless param[:default].to_s.empty?
-       html &lt;&lt; ' = '.nbsp + param[:default]
-     end
-     html = '&lt;i&gt;[' + html + ']&lt;/i&gt;' if param[:optional]
-     html
-    end
-
-    if line
-      arg = 0
-      depth = 0
-      line.reverse.each_byte do |char|
-        if char == ?, and depth == 0
-          arg += 1
-        elsif char == ?(
-          depth -= 1 if depth &gt; 0
-        elsif char == ?)
-          depth += 1
-        end
-      end
-      if arg &lt; params.size
-        params[arg] = '&lt;b&gt;' + params[arg] + '&lt;/b&gt;'
-      elsif not params.empty?
-        params[-1] = '&lt;b&gt;' + params[-1] + '&lt;/b&gt;'
-      end
-    end
-    prototype = '&lt;span class="type"&gt;' + function.type + '&lt;/span&gt; &lt;span&gt;'.nbsp + function.name + '&lt;/span&gt;(' + params.join(', '.nbsp) + ')'
-    tip = &lt;&lt;-HTML
-      &lt;style type="text/css" media="screen"&gt;
-          p {
-              margin: 0;
-          }
-          p.prototype span {
-              color: #00008B;
-          }
-          p.prototype i {
-              color: #666;
-          }
-          p.description {
-              font-size: smaller;
-          }
-          p.prototype span.type {
-            color: #006400;
-          }
-      &lt;/style&gt;
-      &lt;p class="prototype"&gt;#{prototype}&lt;/p&gt;
-      &lt;p class="description"&gt;#{description}&lt;/p&gt;
-    HTML
-    TextMate::UI.tool_tip tip, :format =&gt; :html
-    exit
-  end
-end
-
-# function = nil
-
-# show_function_and_exit(function = ENV['TM_CURRENT_WORD'].to_s)
 result = get_definition(ENV['TM_FILEPATH'], ENV['TM_LINE_NUMBER'].to_i-1, ENV['TM_LINE_INDEX'].to_i-1)
-
-# prefix = ENV['TM_CURRENT_LINE'][0..ENV['TM_LINE_INDEX'].to_i].reverse
-if result.length
-  # TextMate.exit_show_tool_tip result
+if result.length &gt; 0
   result.sub! "&lt;code&gt;php", "&lt;pre&gt;"
   result.sub! "&lt;/code&gt;", "&lt;/pre&gt;"
   TextMate::UI.tool_tip result, :format =&gt; :html
   exit
 end
 
-TextMate.exit_show_tool_tip "Definition not found"</string>
+def get_builtin_definition()
+  # lang = ENV['LANG'] ? ENV['LANG'][0..2] : 'en'
+  # $fnFilename = ENV['TM_BUNDLE_SUPPORT'] + '/function-docs/' + lang + '.txt'
+  #
+  # if !File.exist?($fnFilename)
+  $fnFilename = ENV['TM_BUNDLE_SUPPORT'] + '/function-docs/en.txt'
+  # end
+
+  def show_function_and_exit(function, line = nil)
+    return unless function =~ /^[A-Za-z_][A-Za-z0-9_]*$/
+    functions = `grep -i '^#{function}%' "#{$fnFilename}"`.split("\n")
+  
+    if functions.size == 1
+      function, prototype, description = functions.pop.split('%')
+
+      function = PHPFunction.new(prototype)
+
+      params = function.params.map do |param|
+       html = ''
+       html &lt;&lt; '&lt;span class="type"&gt;' + param[:type] + '&lt;/span&gt; '.nbsp unless param[:type].to_s.empty?
+       html &lt;&lt; param[:name]
+       unless param[:default].to_s.empty?
+         html &lt;&lt; ' = '.nbsp + param[:default]
+       end
+       html = '&lt;i&gt;[' + html + ']&lt;/i&gt;' if param[:optional]
+       html
+      end
+
+      if line
+        arg = 0
+        depth = 0
+        line.reverse.each_byte do |char|
+          if char == ?, and depth == 0
+            arg += 1
+          elsif char == ?(
+            depth -= 1 if depth &gt; 0
+          elsif char == ?)
+            depth += 1
+          end
+        end
+        if arg &lt; params.size
+          params[arg] = '&lt;b&gt;' + params[arg] + '&lt;/b&gt;'
+        elsif not params.empty?
+          params[-1] = '&lt;b&gt;' + params[-1] + '&lt;/b&gt;'
+        end
+      end
+      prototype = '&lt;span class="type"&gt;' + function.type + '&lt;/span&gt; &lt;span&gt;'.nbsp + function.name + '&lt;/span&gt;(' + params.join(', '.nbsp) + ')'
+      tip = &lt;&lt;-HTML
+        &lt;style type="text/css" media="screen"&gt;
+            p {
+                margin: 0;
+            }
+            p.prototype span {
+                color: #00008B;
+            }
+            p.prototype i {
+                color: #666;
+            }
+            p.description {
+                font-size: smaller;
+            }
+            p.prototype span.type {
+              color: #006400;
+            }
+        &lt;/style&gt;
+        &lt;p class="prototype"&gt;#{prototype}&lt;/p&gt;
+        &lt;p class="description"&gt;#{description}&lt;/p&gt;
+      HTML
+      TextMate::UI.tool_tip tip, :format =&gt; :html
+      exit
+    end
+  end
+
+  function = nil
+
+  show_function_and_exit(function = ENV['TM_CURRENT_WORD'].to_s)
+
+  prefix = ENV['TM_CURRENT_LINE'][0..ENV['TM_LINE_INDEX'].to_i].reverse
+
+  # Keep moving back a function call until we get a match and exit
+  while prefix =~ /\(\s*(\w+)/
+    show_function_and_exit(function = $1.reverse, ENV['TM_CURRENT_LINE'][($' + $&amp;).length..ENV['TM_LINE_INDEX'].to_i - 1])
+    prefix = prefix[$&amp;.length..-1]
+  end
+
+  show_function_and_exit(function = $1) if ENV['TM_CURRENT_LINE'][0..ENV['TM_LINE_INDEX'].to_i] =~ /(\w+)\($/
+
+  TextMate.exit_show_tool_tip "Function not found: " + function.to_s
+end
+
+get_builtin_definition()</string>
 	<key>input</key>
 	<string>selection</string>
 	<key>inputFormat</key>
