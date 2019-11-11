@@ -78,7 +78,7 @@ rescue =&gt; e
 end
 
 word = ENV['TM_CURRENT_WORD'] || ""
-word = "&gt;" if word == "-&gt;"
+word = "" if word == "-&gt;"
 word = "" if word == "::"
 
 result = get_completion(ENV['TM_FILEPATH'], ENV['TM_LINE_NUMBER'].to_i-1, ENV['TM_LINE_INDEX'].to_i-1, word)
