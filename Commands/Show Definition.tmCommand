@@ -20,22 +20,7 @@ require ENV['TM_BUNDLE_SUPPORT'] + '/lib/php.rb'
 require ENV['TM_SUPPORT_PATH'] + '/lib/ui'
 require ENV['TM_SUPPORT_PATH'] + '/lib/exit_codes'
 
-def initialize_project()
-  dir = ENV['TM_PROJECT_DIRECTORY']
-  uri = URI('http://127.0.0.1:8787/')
-  http = Net::HTTP.new(uri.host, uri.port)
-  req = Net::HTTP::Post.new(uri.path, 'Content-Type' =&gt; 'application/json')
-  req.body = { 'method' =&gt; 'initialize', 'body' =&gt; { 'dir' =&gt; dir, 
-      'storage' =&gt; "/tmp/intelephense/" }}.to_json
-  res = http.request(req)
-  json = JSON.parse res.body
-  if json['result'] == "error"
-    TextMate.exit_show_tool_tip(json['message'])
-  end
-end
-
 def did_open(file)
-    initialize_project()
     document = []
     while line = $stdin.gets
       document.push(line)
@@ -59,7 +44,7 @@ rescue =&gt; e
 end
 
 def get_definition(file, line, char)
-    did_open(file)
+    did_open(file) # for some reason still need to open before each hover/completion request
     uri = URI('http://127.0.0.1:8787/')
     http = Net::HTTP.new(uri.host, uri.port)
     req = Net::HTTP::Post.new(uri.path, 'Content-Type' =&gt; 'application/json')
@@ -201,7 +186,7 @@ get_builtin_definition()</string>
 	<key>outputFormat</key>
 	<string>html</string>
 	<key>outputLocation</key>
-	<string>newWindow</string>
+	<string>toolTip</string>
 	<key>scope</key>
 	<string>source.php</string>
 	<key>uuid</key>

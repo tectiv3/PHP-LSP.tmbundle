@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>beforeRunningCommand</key>
+	<string>nop</string>
+	<key>command</key>
+	<string>#!/usr/bin/env ruby -wU
+
+require 'net/http'
+require 'json'
+
+require ENV['TM_SUPPORT_PATH'] + '/lib/ui'
+require ENV['TM_SUPPORT_PATH'] + '/lib/exit_codes'
+
+def initialize_project()
+  dir = ENV['TM_PROJECT_DIRECTORY']
+  uri = URI('http://127.0.0.1:8787/')
+  http = Net::HTTP.new(uri.host, uri.port)
+  req = Net::HTTP::Post.new(uri.path, 'Content-Type' =&gt; 'application/json')
+  req.body = { 'method' =&gt; 'initialize', 'body' =&gt; { 'dir' =&gt; dir, 
+      'storage' =&gt; "/tmp/intelephense/" }}.to_json
+  res = http.request(req)
+  json = JSON.parse res.body
+  if json['result'] == "error"
+    TextMate.exit_show_tool_tip(json['message'])
+  end
+end
+
+def did_open(file)
+    initialize_project()
+    document = []
+    while line = $stdin.gets
+      document.push(line)
+    end
+    text = document.join
+    if text.length &gt; 1000000
+      TextMate.exit_show_tool_tip("File is too big, ignoring...")
+    end
+    uri = URI('http://127.0.0.1:8787/')
+    http = Net::HTTP.new(uri.host, uri.port)
+    req = Net::HTTP::Post.new(uri.path, 'Content-Type' =&gt; 'application/json')
+    req.body = {'method' =&gt; 'didOpen', 'body' =&gt; { 'uri' =&gt; "file://" + file, 
+        "languageId" =&gt; "php", "text" =&gt; text}}.to_json
+    res = http.request(req)
+    json = JSON.parse res.body
+    if json['result'] == "error"
+      TextMate.exit_show_tool_tip(json['message'])
+    end
+rescue =&gt; e
+    return "failed #{e}"
+end
+
+did_open(ENV['TM_FILEPATH'])
+
+# puts "opened " + ENV['TM_FILEPATH']</string>
+	<key>input</key>
+	<string>document</string>
+	<key>inputFormat</key>
+	<string>text</string>
+	<key>name</key>
+	<string>On Open</string>
+	<key>outputCaret</key>
+	<string>afterOutput</string>
+	<key>outputFormat</key>
+	<string>text</string>
+	<key>outputLocation</key>
+	<string>toolTip</string>
+	<key>scope</key>
+	<string>source.php</string>
+	<key>semanticClass</key>
+	<string>callback.document.did-open</string>
+	<key>uuid</key>
+	<string>951C61DC-20FC-4BAE-9051-BFFBF8A3AF88</string>
+	<key>version</key>
+	<integer>2</integer>
+</dict>
+</plist>
