@@ -7,9 +7,6 @@
 	<key>command</key>
 	<string>#!/usr/bin/env ruby
 
-#require "#{ENV['TM_BUNDLE_SUPPORT']}/phplsp"
-#LSP::godef
-
 require 'net/http'
 require 'json'
 
@@ -68,6 +65,7 @@ def get_location(file, line, char)
     if result == "error"
       return json['message']
     end
+    result = result.kind_of?(Array) ? result[0] : result
     file = (result['uri'].sub! 'file://', '')
     return TextMate.go_to(:file =&gt; file,
                    :line =&gt; result['range']['start']['line']+1,

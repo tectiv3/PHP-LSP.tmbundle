@@ -5,20 +5,19 @@
 	<key>beforeRunningCommand</key>
 	<string>nop</string>
 	<key>command</key>
-	<string>#!/usr/bin/env ruby -wU
+	<string>#!/usr/bin/env ruby18
+
+libdir = ENV['TM_BUNDLE_SUPPORT'] + '/lib/'
+$LOAD_PATH.unshift(libdir) unless $LOAD_PATH.include?(libdir)
+require ENV['TM_BUNDLE_SUPPORT'] + '/lib/json'
 
 require 'net/http'
-require 'json'
 
-SUPPORT = ENV['TM_SUPPORT_PATH']
-DIALOG = SUPPORT + '/bin/tm_dialog'
-
-require SUPPORT + '/lib/escape'
-require SUPPORT + '/lib/osx/plist'
-
-require ENV['TM_BUNDLE_SUPPORT'] + '/lib/php.rb'
-require ENV['TM_SUPPORT_PATH'] + '/lib/ui'
-require ENV['TM_SUPPORT_PATH'] + '/lib/exit_codes'
+require ENV['TM_SUPPORT_PATH'] + "/lib/ui.rb"
+require ENV['TM_SUPPORT_PATH'] + "/lib/escape.rb"
+require ENV['TM_SUPPORT_PATH'] + "/lib/exit_codes.rb"
+require ENV['TM_SUPPORT_PATH'] + "/lib/web_preview"
+require ENV['TM_SUPPORT_PATH'] + "/lib/tm/htmloutput.rb"
 
 def initialize_project()
   dir = ENV['TM_PROJECT_DIRECTORY']
@@ -58,154 +57,201 @@ rescue =&gt; e
     return "failed #{e}"
 end
 
-def get_definition(file, line, char)
+def get_completion(file, line, char, last_char)
     did_open(file)
     uri = URI('http://127.0.0.1:8787/')
     http = Net::HTTP.new(uri.host, uri.port)
     req = Net::HTTP::Post.new(uri.path, 'Content-Type' =&gt; 'application/json')
-    req.body = {method: 'hover', body: {textDocument: { uri: "file://" + file}, position: {line: line, character: char}}}.to_json
+    req.body = {'method' =&gt; 'completion', 'body' =&gt; { 'textDocument' =&gt; { 'uri' =&gt; "file://" + file}, 'position' =&gt; {'line' =&gt; line, 'character' =&gt; char}, 'context' =&gt; { 'triggerKind' =&gt; 1 }}}.to_json
     res = http.request(req)
     json = JSON.parse res.body
-    if json['result'] == "error"
-      tip = json['message']
-    else
-      tip = ''
-      IO.popen('"$TM_SUPPORT_PATH/bin/Markdown.pl"|"$TM_SUPPORT_PATH/bin/SmartyPants.pl"', "r+") do |io|
-        io &lt;&lt; json['result']['contents']['value']
-        io.close_write
-        io.each_line do |line|
-          tip &lt;&lt; line
-        end
-      end
+    result = json['result']
+    if result == "error"
+      TextMate.exit_show_tool_tip(json['message'])
     end
-    return tip
+    if !result
+      return []
+    end
+    return result['items']
 rescue =&gt; e
-    return "failed #{e}"
+    TextMate.exit_show_tool_tip("failed #{e}")
 end
 
-class String
-  def nbsp
-    gsub(' ', '&amp;nbsp;')
+word = ENV['TM_CURRENT_WORD'] || ""
+word = "&gt;" if word == "-&gt;"
+word = "" if word == "::"
+
+result = get_completion(ENV['TM_FILEPATH'], ENV['TM_LINE_NUMBER'].to_i-1, ENV['TM_LINE_INDEX'].to_i-1, word)
+TextMate.exit_show_tool_tip("No completions found.") if result.length == 0
+
+# set up images for use by DIALOG
+# this probably should be done only once, somehow.
+icon_plist = "{ " + [ "const", "func", "package", "type", "var" ].map { |v| 
+  "#{v} = '#{ENV['TM_BUNDLE_SUPPORT']}/icons/#{v}.pdf';"
+}.join(" ") + " }"
+system( ENV['DIALOG'], "images", "--register", icon_plist )
+
+def get_image_name(type) 
+  # namespace CompletionItemKind {
+  #   Text = 1;
+  #   Method = 2;
+  #   Function = 3;
+  #   Constructor = 4;
+  #   Field = 5;
+  #   Variable = 6;
+  #   Class = 7;
+  #   Interface = 8;
+  #   Module = 9;
+  #   Property = 10;
+  #   Unit = 11;
+  #   Value = 12;
+  #   Enum = 13;
+  #   Keyword = 14;
+  #   Snippet = 15;
+  #   Color = 16;
+  #   File = 17;
+  #   Reference = 18;
+  #   Folder = 19;
+  #   EnumMember = 20;
+  #   Constant = 21;
+  #   Struct = 22;
+  #   Event = 23;
+  #   Operator = 24;
+  #   TypeParameter = 25;
+  # }
+  case type
+  when 1
+    return 'const'
+  when 21
+    return 'const'
+  when 2..4
+    return 'func'
+  when 5..6
+    return 'var'
+  when 10
+    return 'var'
+  when 7..9
+    return 'type'
+  when 11
+    return 'type'
+  when 17..19
+    return 'package'
+  else
+    return ''
   end
 end
 
-result = get_definition(ENV['TM_FILEPATH'], ENV['TM_LINE_NUMBER'].to_i-1, ENV['TM_LINE_INDEX'].to_i-1)
-if result.length &gt; 0
-  result.sub! "&lt;code&gt;php", "&lt;pre&gt;"
-  result.sub! "&lt;/code&gt;", "&lt;/pre&gt;"
-  TextMate::UI.tool_tip result, :format =&gt; :html
-  exit
-end
-
-def get_builtin_definition()
-  # lang = ENV['LANG'] ? ENV['LANG'][0..2] : 'en'
-  # $fnFilename = ENV['TM_BUNDLE_SUPPORT'] + '/function-docs/' + lang + '.txt'
-  #
-  # if !File.exist?($fnFilename)
-  $fnFilename = ENV['TM_BUNDLE_SUPPORT'] + '/function-docs/en.txt'
-  # end
-
-  def show_function_and_exit(function, line = nil)
-    return unless function =~ /^[A-Za-z_][A-Za-z0-9_]*$/
-    functions = `grep -i '^#{function}%' "#{$fnFilename}"`.split("\n")
-  
-    if functions.size == 1
-      function, prototype, description = functions.pop.split('%')
-
-      function = PHPFunction.new(prototype)
-
-      params = function.params.map do |param|
-       html = ''
-       html &lt;&lt; '&lt;span class="type"&gt;' + param[:type] + '&lt;/span&gt; '.nbsp unless param[:type].to_s.empty?
-       html &lt;&lt; param[:name]
-       unless param[:default].to_s.empty?
-         html &lt;&lt; ' = '.nbsp + param[:default]
-       end
-       html = '&lt;i&gt;[' + html + ']&lt;/i&gt;' if param[:optional]
-       html
-      end
-
-      if line
-        arg = 0
-        depth = 0
-        line.reverse.each_byte do |char|
-          if char == ?, and depth == 0
-            arg += 1
-          elsif char == ?(
-            depth -= 1 if depth &gt; 0
-          elsif char == ?)
-            depth += 1
-          end
-        end
-        if arg &lt; params.size
-          params[arg] = '&lt;b&gt;' + params[arg] + '&lt;/b&gt;'
-        elsif not params.empty?
-          params[-1] = '&lt;b&gt;' + params[-1] + '&lt;/b&gt;'
-        end
-      end
-      prototype = '&lt;span class="type"&gt;' + function.type + '&lt;/span&gt; &lt;span&gt;'.nbsp + function.name + '&lt;/span&gt;(' + params.join(', '.nbsp) + ')'
-      tip = &lt;&lt;-HTML
-        &lt;style type="text/css" media="screen"&gt;
-            p {
-                margin: 0;
-            }
-            p.prototype span {
-                color: #00008B;
-            }
-            p.prototype i {
-                color: #666;
-            }
-            p.description {
-                font-size: smaller;
-            }
-            p.prototype span.type {
-              color: #006400;
-            }
-        &lt;/style&gt;
-        &lt;p class="prototype"&gt;#{prototype}&lt;/p&gt;
-        &lt;p class="description"&gt;#{description}&lt;/p&gt;
-      HTML
-      TextMate::UI.tool_tip tip, :format =&gt; :html
-      exit
+# helper function to build the choice hash
+def make_completion_hash(line)
+  def depth_at_i(sig)
+    depths = Array.new
+    depth = 0
+    sig.chars { |ch|
+      depth-=1 if ch == ")"
+      depths &lt;&lt; depth
+      depth+=1 if ch == "("
+    }
+    return depths
+  end
+  def get_f_args(sig)
+    if sig.index("(") == nil
+      return sig
     end
+    depths = depth_at_i(sig)
+    pos = sig.index(")")
+    while pos != nil &amp;&amp; depths[pos] &gt; 0
+      pos = sig.index(")", pos+1)
+    end
+    return sig[ Range.new(sig.index("(")+1, pos - 1) ]
+  end
+  def split_args(sig)
+    args = Array.new
+    depths = depth_at_i(sig)
+    start = 0
+    pos = sig.index(",")
+
+    while pos != nil
+      if depths[pos] == 0
+        args &lt;&lt; sig[ Range.new(start, pos-1) ]
+        start = pos+1
+      end
+      pos = sig.index(",", pos+1)
+    end
+
+    lastarg = sig[ Range.new(start, sig.length) ].strip
+    args &lt;&lt; lastarg unless lastarg == ""
+    return args
   end
 
-  function = nil
+  image = get_image_name(line['kind'])
+  word = ENV['TM_CURRENT_WORD'] || ""
 
-  show_function_and_exit(function = ENV['TM_CURRENT_WORD'].to_s)
+  match = line['sortText'] || line['label']
 
-  prefix = ENV['TM_CURRENT_LINE'][0..ENV['TM_LINE_INDEX'].to_i].reverse
+  display = image == "func" ? (line['detail'] || line['label']) : line['label']
+  display = (display == "" ? line['label'] : display)
 
-  # Keep moving back a function call until we get a match and exit
-  while prefix =~ /\(\s*(\w+)/
-    show_function_and_exit(function = $1.reverse, ENV['TM_CURRENT_LINE'][($' + $&amp;).length..ENV['TM_LINE_INDEX'].to_i - 1])
-    prefix = prefix[$&amp;.length..-1]
+  # puts insert.inspect
+  # insert = insert[word.size..-1] if insert.start_with?(word)
+  # TextMate.exit_show_tool_tip(insert)
+  # exit
+  insert = ''
+  full = line['textEdit']['newText']
+  if image == "func"
+    insert = line['textEdit']['newText']
+    insert = insert[match.size..-1] if insert.start_with?(match)
+    i = 0
+    insert.sub! match, ''
+    insert.sub! '$0', ''
+    args = split_args(get_f_args( display )).map { |v| "${#{i += 1}:"+e_snp(v)+"}" }.join(", ")
+    full[0..-2] += args
+    insert[0..-2] += args
+    full += ";$0"
+    insert += ";$0"
   end
-
-  show_function_and_exit(function = $1) if ENV['TM_CURRENT_LINE'][0..ENV['TM_LINE_INDEX'].to_i] =~ /(\w+)\($/
-
-  TextMate.exit_show_tool_tip "Function not found: " + function.to_s
+  if insert == display
+    insert = ''
+  end
+  result = { 'match' =&gt; match, 'display' =&gt; display, 'insert' =&gt; insert, 'image' =&gt; image, 'full' =&gt; full  }
+  # puts result.inspect
+  # exit
+  # TextMate.exit_show_tool_tip(result)
+  return result
+rescue =&gt; e
+    TextMate.exit_show_tool_tip("failed #{e}")
 end
 
-get_builtin_definition()</string>
+# build the list of completion choices.
+hash = result.collect { |v| make_completion_hash( v ) }
+options = { :extra_chars =&gt; "_:", :case_insensitive =&gt; true, :initial_filter =&gt; word }
+
+# puts hash.inspect
+# exit
+# if there is only one match, insert. no need to show the menu
+if hash.length == 1
+  TextMate.exit_insert_snippet( hash[0]['full'] )
+end
+# TextMate.exit_show_tool_tip(hash)
+TextMate::UI.complete(hash, options )
+</string>
 	<key>input</key>
-	<string>selection</string>
+	<string>document</string>
 	<key>inputFormat</key>
 	<string>text</string>
 	<key>keyEquivalent</key>
-	<string>^</string>
+	<string>~	</string>
 	<key>name</key>
-	<string>Show definition</string>
+	<string>Complete</string>
 	<key>outputCaret</key>
 	<string>afterOutput</string>
 	<key>outputFormat</key>
-	<string>html</string>
+	<string>text</string>
 	<key>outputLocation</key>
-	<string>newWindow</string>
+	<string>atCaret</string>
 	<key>scope</key>
 	<string>source.php</string>
 	<key>uuid</key>
-	<string>8BDB58A3-937F-479A-B4DB-691CECE83040</string>
+	<string>9C150957-92ED-4785-A7D0-C7428E938968</string>
 	<key>version</key>
 	<integer>2</integer>
 </dict>
