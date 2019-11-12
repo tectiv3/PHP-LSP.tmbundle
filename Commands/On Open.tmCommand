@@ -14,11 +14,12 @@ require ENV['TM_SUPPORT_PATH'] + '/lib/ui'
 require ENV['TM_SUPPORT_PATH'] + '/lib/exit_codes'
 
 def initialize_project()
-  dir = ENV['TM_PROJECT_DIRECTORY']
+  dir = ENV['TM_PROJECT_DIRECTORY']+'/'
   uri = URI('http://127.0.0.1:8787/')
+  name = ENV['TM_DISPLAYNAME'] || File.basename(ENV['TM_PROJECT_DIRECTORY'])
   http = Net::HTTP.new(uri.host, uri.port)
   req = Net::HTTP::Post.new(uri.path, 'Content-Type' =&gt; 'application/json')
-  req.body = { 'method' =&gt; 'initialize', 'body' =&gt; { 'dir' =&gt; dir, 
+  req.body = { 'method' =&gt; 'initialize', 'body' =&gt; { 'dir' =&gt; dir, 'name' =&gt; name,
       'storage' =&gt; "/tmp/intelephense/" }}.to_json
   res = http.request(req)
   json = JSON.parse res.body
@@ -28,7 +29,6 @@ def initialize_project()
 end
 
 def did_open(file)
-    initialize_project()
     document = []
     while line = $stdin.gets
       document.push(line)
@@ -41,7 +41,7 @@ def did_open(file)
     http = Net::HTTP.new(uri.host, uri.port)
     req = Net::HTTP::Post.new(uri.path, 'Content-Type' =&gt; 'application/json')
     req.body = {'method' =&gt; 'didOpen', 'body' =&gt; { 'uri' =&gt; "file://" + file, 
-        "languageId" =&gt; "php", "text" =&gt; text}}.to_json
+        "languageId" =&gt; "php", "version" =&gt; (rand() * 10).to_i, "text" =&gt; text}}.to_json
     res = http.request(req)
     json = JSON.parse res.body
     if json['result'] == "error"
@@ -51,7 +51,8 @@ rescue =&gt; e
     return "failed #{e}"
 end
 
-did_open(ENV['TM_FILEPATH'])
+initialize_project()
+# did_open(ENV['TM_FILEPATH'])
 
 # puts "opened " + ENV['TM_FILEPATH']</string>
 	<key>input</key>

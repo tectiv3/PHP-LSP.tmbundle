@@ -39,7 +39,7 @@ def did_open(file)
       TextMate.exit_show_tool_tip(json['message'])
     end
 rescue =&gt; e
-    return "failed #{e}"
+    TextMate.exit_show_tool_tip( "failed #{e}" )
 end
 
 def get_completion(file, line, char, last_char)
