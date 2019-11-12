@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>autoRefresh</key>
+	<array>
+		<string>DocumentClosed</string>
+	</array>
+	<key>beforeRunningCommand</key>
+	<string>nop</string>
+	<key>command</key>
+	<string>#!/usr/bin/env ruby -wU
+
+require 'net/http'
+require 'json'
+
+require ENV['TM_SUPPORT_PATH'] + '/lib/ui'
+require ENV['TM_SUPPORT_PATH'] + '/lib/exit_codes'
+
+def initialize_project()
+  dir = ENV['TM_PROJECT_DIRECTORY']
+  uri = URI('http://127.0.0.1:8787/')
+  http = Net::HTTP.new(uri.host, uri.port)
+  req = Net::HTTP::Post.new(uri.path, 'Content-Type' =&gt; 'application/json')
+  req.body = { 'method' =&gt; 'initialize', 'body' =&gt; { 'dir' =&gt; dir, 
+      'storage' =&gt; "/tmp/intelephense/" }}.to_json
+  res = http.request(req)
+  json = JSON.parse res.body
+  if json['result'] == "error"
+    TextMate.exit_show_tool_tip(json['message'])
+  end
+rescue =&gt; e
+    TextMate.exit_show_tool_tip "failed #{e}"
+end
+
+def did_close(file)
+    initialize_project()
+    uri = URI('http://127.0.0.1:8787/')
+    http = Net::HTTP.new(uri.host, uri.port)
+    req = Net::HTTP::Post.new(uri.path, 'Content-Type' =&gt; 'application/json')
+    req.body = {'method' =&gt; 'didClose', 'body' =&gt; { 'uri' =&gt; "file://" + file }}.to_json
+    res = http.request(req)
+    json = JSON.parse res.body
+    if json['result'] == "error"
+      TextMate.exit_show_tool_tip(json['message'])
+    end
+rescue =&gt; e
+    TextMate.exit_show_tool_tip "failed #{e}"
+end
+
+did_close(ENV['TM_FILEPATH'])
+
+# puts "closed " + ENV['TM_FILEPATH']</string>
+	<key>input</key>
+	<string>document</string>
+	<key>inputFormat</key>
+	<string>text</string>
+	<key>name</key>
+	<string>On Close</string>
+	<key>outputCaret</key>
+	<string>afterOutput</string>
+	<key>outputFormat</key>
+	<string>html</string>
+	<key>outputLocation</key>
+	<string>newWindow</string>
+	<key>scope</key>
+	<string>source.php</string>
+	<key>uuid</key>
+	<string>007E5F08-FCDC-4CBE-8329-49A146602320</string>
+	<key>version</key>
+	<integer>2</integer>
+</dict>
+</plist>

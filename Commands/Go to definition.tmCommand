@@ -15,7 +15,31 @@ require ENV['TM_SUPPORT_PATH'] + '/lib/ui'
 require ENV['TM_SUPPORT_PATH'] + '/lib/exit_codes'
 require ENV['TM_SUPPORT_PATH'] + '/lib/tm/save_current_document'
 
+def did_open(file)
+    document = []
+    while line = $stdin.gets
+      document.push(line)
+    end
+    text = document.join
+    if text.length &gt; 1000000
+      TextMate.exit_show_tool_tip("File is too big, ignoring...")
+    end
+    uri = URI('http://127.0.0.1:8787/')
+    http = Net::HTTP.new(uri.host, uri.port)
+    req = Net::HTTP::Post.new(uri.path, 'Content-Type' =&gt; 'application/json')
+    req.body = {'method' =&gt; 'didOpen', 'body' =&gt; { 'uri' =&gt; "file://" + file, 
+        "languageId" =&gt; "php", "text" =&gt; text}}.to_json
+    res = http.request(req)
+    json = JSON.parse res.body
+    if json['result'] == "error"
+      TextMate.exit_show_tool_tip(json['message'])
+    end
+rescue =&gt; e
+    TextMate.exit_show_tool_tip( "failed #{e}" )
+end
+
 def get_location(file, line, char)
+    did_open(file)
     uri = URI('http://127.0.0.1:8787/')
     http = Net::HTTP.new(uri.host, uri.port)
     req = Net::HTTP::Post.new(uri.path, 'Content-Type' =&gt; 'application/json')
