@@ -91,19 +91,19 @@ did_open(ENV['TM_FILEPATH'])
 	<key>inputFormat</key>
 	<string>text</string>
 	<key>name</key>
-	<string>On Open</string>
+	<string>On Save</string>
 	<key>outputCaret</key>
 	<string>afterOutput</string>
 	<key>outputFormat</key>
 	<string>text</string>
 	<key>outputLocation</key>
-	<string>toolTip</string>
+	<string>discard</string>
 	<key>scope</key>
 	<string>source.php</string>
 	<key>semanticClass</key>
-	<string>callback.document.did-open</string>
+	<string>callback.document.will-save</string>
 	<key>uuid</key>
-	<string>951C61DC-20FC-4BAE-9051-BFFBF8A3AF88</string>
+	<string>34EC1ABE-ED99-4B78-B193-CBBBAB0EC28A</string>
 	<key>version</key>
 	<integer>2</integer>
 </dict>

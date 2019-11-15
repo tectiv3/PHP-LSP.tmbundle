@@ -37,7 +37,7 @@ def did_open(file)
     res = http.request(req)
     json = JSON.parse res.body
     if json['result'] == "error"
-      TextMate.exit_show_tool_tip(json['message'])
+      return
     end
 rescue =&gt; e
     return "failed #{e}"
