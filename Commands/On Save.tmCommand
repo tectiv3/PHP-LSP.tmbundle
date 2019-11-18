@@ -50,6 +50,9 @@ def did_open(file)
     if json['result'] == "error"
       return
     end
+    if json['result'] == "ok"
+      return
+    end
     system(ENV['TM_MATE'], "--uuid", ENV['TM_DOCUMENT_UUID'], "--clear-mark=note", "--clear-mark=warning", "--clear-mark=error")
     json['result'].each do |line|
       setMark(line)

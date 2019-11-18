@@ -25,10 +25,12 @@ def initialize_project()
   res = http.request(req)
   json = JSON.parse res.body
   if json['result'] == "error"
-    TextMate.exit_show_tool_tip(json['message'])
+    # TextMate.exit_show_tool_tip(json['message'])
+    return
   end
 rescue =&gt; e
-  TextMate.exit_show_tool_tip "failed #{e}"
+  # TextMate.exit_show_tool_tip "failed #{e}"
+  return
 end
 
 def did_open(file)
@@ -55,7 +57,8 @@ def did_open(file)
       setMark(line)
     end
 rescue =&gt; e
-    TextMate.exit_show_tool_tip "failed #{e}"
+    # TextMate.exit_show_tool_tip "failed #{e}"
+    return
 end
 
 def getIcon(severity)
@@ -83,7 +86,7 @@ rescue =&gt; e
 end
 
 initialize_project()
-did_open(ENV['TM_FILEPATH'])
+# did_open(ENV['TM_FILEPATH'])
 
 # puts "opened " + ENV['TM_FILEPATH']</string>
 	<key>input</key>
@@ -97,7 +100,7 @@ did_open(ENV['TM_FILEPATH'])
 	<key>outputFormat</key>
 	<string>text</string>
 	<key>outputLocation</key>
-	<string>toolTip</string>
+	<string>discard</string>
 	<key>scope</key>
 	<string>source.php</string>
 	<key>semanticClass</key>
