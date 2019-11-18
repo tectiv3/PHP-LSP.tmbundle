@@ -38,12 +38,9 @@ def did_open(file)
     if json['result'] == "error"
       return
     end
-    system(ENV['TM_MATE'], "--uuid", ENV['TM_DOCUMENT_UUID'], "--clear-mark=note", "--clear-mark=warning", "--clear-mark=error")
-    json['result'].each do |line|
-      setMark(line)
-    end
 rescue =&gt; e
-    TextMate.exit_show_tool_tip( "failed #{e}" )
+    # TextMate.exit_show_tool_tip( "failed #{e}" )
+    return
 end
 
 def get_completion(file, line, char, last_char)
@@ -51,7 +48,7 @@ def get_completion(file, line, char, last_char)
     uri = URI('http://127.0.0.1:8787/')
     http = Net::HTTP.new(uri.host, uri.port)
     req = Net::HTTP::Post.new(uri.path, 'Content-Type' =&gt; 'application/json')
-    req.body = {'method' =&gt; 'completion', 'body' =&gt; { 'textDocument' =&gt; { 'uri' =&gt; "file://" + file}, 'position' =&gt; {'line' =&gt; line, 'character' =&gt; char}, 'context' =&gt; { 'triggerKind' =&gt; 1 }}}.to_json
+    req.body = {'method' =&gt; 'completion', 'body' =&gt; { 'textDocument' =&gt; { 'uri' =&gt; "file://" + file}, 'position' =&gt; {'line' =&gt; line, 'character' =&gt; char}, 'context' =&gt; { 'triggerKind' =&gt; 3 }}}.to_json
     res = http.request(req)
     json = JSON.parse res.body
     result = json['result']
@@ -64,30 +61,6 @@ def get_completion(file, line, char, last_char)
     return result['items']
 rescue =&gt; e
     TextMate.exit_show_tool_tip("failed #{e}")
-end
-
-def getIcon(severity)
-  case severity
-  when 4
-    return 'note'
-  when 3
-    return 'warning'
-  end
-  return 'error'
-end
-
-def setMark(line)
-  range = line['range']
-  unless range['start']['line'].nil?
-    lineno = range['start']['line']+1
-    column = range['start']['character']+1
-    icon = getIcon(line['severity'])
-    message = line['message']
-    tm_args = ["--uuid", ENV['TM_DOCUMENT_UUID'], "--line=#{lineno}:#{column || '1'}", "--set-mark=#{icon}:#{message}"]
-    system(ENV['TM_MATE'], *tm_args)
-  end
-rescue =&gt; e
-  TextMate.exit_show_tool_tip "failed #{e}"
 end
 
 word = ENV['TM_CURRENT_WORD'] || ""
