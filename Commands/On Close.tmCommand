@@ -11,6 +11,10 @@
 	<key>command</key>
 	<string>#!/usr/bin/env ruby -wU
 
+if ENV['TM_ENABLE_IS'] != 'true'
+  return
+end
+
 require 'net/http'
 require 'json'
 

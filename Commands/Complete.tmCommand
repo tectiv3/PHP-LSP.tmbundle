@@ -5,13 +5,18 @@
 	<key>beforeRunningCommand</key>
 	<string>nop</string>
 	<key>command</key>
-	<string>#!/usr/bin/env ruby18
+	<string>#!/usr/bin/env ruby
+
+if ENV['TM_ENABLE_IS'] != 'true'
+  return
+end
 
 libdir = ENV['TM_BUNDLE_SUPPORT'] + '/lib/'
 $LOAD_PATH.unshift(libdir) unless $LOAD_PATH.include?(libdir)
-require ENV['TM_BUNDLE_SUPPORT'] + '/lib/json'
+# require ENV['TM_BUNDLE_SUPPORT'] + '/lib/json'
 
 require 'net/http'
+require 'json'
 
 require ENV['TM_SUPPORT_PATH'] + "/lib/ui.rb"
 require ENV['TM_SUPPORT_PATH'] + "/lib/escape.rb"
@@ -48,7 +53,7 @@ def get_completion(file, line, char, last_char)
     uri = URI('http://127.0.0.1:8787/')
     http = Net::HTTP.new(uri.host, uri.port)
     req = Net::HTTP::Post.new(uri.path, 'Content-Type' =&gt; 'application/json')
-    req.body = {'method' =&gt; 'completion', 'body' =&gt; { 'textDocument' =&gt; { 'uri' =&gt; "file://" + file}, 'position' =&gt; {'line' =&gt; line, 'character' =&gt; char}, 'context' =&gt; { 'triggerKind' =&gt; 3 }}}.to_json
+    req.body = {'method' =&gt; 'completion', 'body' =&gt; { 'textDocument' =&gt; { 'uri' =&gt; "file://" + file}, 'position' =&gt; {'line' =&gt; line, 'character' =&gt; char}, 'context' =&gt; { 'triggerKind' =&gt; 1 }}}.to_json
     res = http.request(req)
     json = JSON.parse res.body
     result = json['result']
@@ -172,6 +177,10 @@ def make_completion_hash(line)
   image = get_image_name(line['kind'])
   word = ENV['TM_CURRENT_WORD'] || ""
 
+  if line['sortText'].to_i != 0
+    return { 'match' =&gt; false }
+  end
+
   match = line['sortText'] || line['label']
 
   display = image == "func" ? (line['detail'] || line['label']) : line['label']
@@ -207,16 +216,23 @@ rescue =&gt; e
     TextMate.exit_show_tool_tip("failed #{e}")
 end
 
-# build the list of completion choices.
+# build the list of completion choices. #slice(0, 30)
 hash = result.collect { |v| make_completion_hash( v ) }
+hash = hash.reject { |v| !v['match'] }
 options = { :extra_chars =&gt; "_:", :case_insensitive =&gt; true, :initial_filter =&gt; word }
 
+# puts hash.length
 # puts hash.inspect
 # exit
 # if there is only one match, insert. no need to show the menu
 if hash.length == 1
   TextMate.exit_insert_snippet( hash[0]['full'] )
+elsif hash.length == 0
+  choices = OSX::PropertyList.load(File.read(ENV['TM_BUNDLE_SUPPORT'] + '/functions.plist'))
+  TextMate::UI.complete(choices, options)
+  exit
 end
+
 # TextMate.exit_show_tool_tip(hash)
 TextMate::UI.complete(hash, options )
 </string>

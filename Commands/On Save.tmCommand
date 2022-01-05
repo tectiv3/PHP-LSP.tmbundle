@@ -7,6 +7,10 @@
 	<key>command</key>
 	<string>#!/usr/bin/env ruby -wU
 
+if ENV['TM_ENABLE_IS'] != 'true'
+  return
+end
+
 require 'net/http'
 require 'json'
 
@@ -32,6 +36,7 @@ rescue =&gt; e
 end
 
 def did_open(file)
+    initialize_project()
     document = []
     while line = $stdin.gets
       document.push(line)
@@ -85,7 +90,6 @@ rescue =&gt; e
   TextMate.exit_show_tool_tip "failed #{e}"
 end
 
-initialize_project()
 did_open(ENV['TM_FILEPATH'])
 
 # puts "opened " + ENV['TM_FILEPATH']</string>

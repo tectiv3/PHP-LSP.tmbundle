@@ -6,6 +6,11 @@
 	<string>nop</string>
 	<key>command</key>
 	<string>#!/usr/bin/env ruby -wU
+# encoding: utf-8
+
+if ENV['TM_ENABLE_IS'] != 'true'
+  return
+end
 
 require 'net/http'
 require 'json'
@@ -76,6 +81,7 @@ end
 
 result = get_definition(ENV['TM_FILEPATH'], ENV['TM_LINE_NUMBER'].to_i-1, ENV['TM_LINE_INDEX'].to_i-1)
 if result.length &gt; 0
+  # TextMate::UI.tool_tip result, :format =&gt; :html, :transparent =&gt; false
   result.sub! "&lt;code&gt;php", "&lt;pre&gt;"
   result.sub! "&lt;/code&gt;", "&lt;/pre&gt;"
   TextMate::UI.tool_tip result, :format =&gt; :html
