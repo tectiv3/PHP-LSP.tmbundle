@@ -26,8 +26,7 @@ def initialize_project()
   uri = URI('http://127.0.0.1:8787/')
   http = Net::HTTP.new(uri.host, uri.port)
   req = Net::HTTP::Post.new(uri.path, 'Content-Type' =&gt; 'application/json')
-  req.body = { 'method' =&gt; 'initialize', 'body' =&gt; { 'dir' =&gt; dir, 
-      'storage' =&gt; "/tmp/intelephense/" }}.to_json
+  req.body = { 'method' =&gt; 'initialize', 'body' =&gt; { 'dir' =&gt; dir }}.to_json
   res = http.request(req)
   json = JSON.parse res.body
   if json['result'] == "error"

@@ -19,11 +19,29 @@ SUPPORT = ENV['TM_SUPPORT_PATH']
 DIALOG = SUPPORT + '/bin/tm_dialog'
 
 require SUPPORT + '/lib/escape'
-require SUPPORT + '/lib/osx/plist'
 
 require ENV['TM_BUNDLE_SUPPORT'] + '/lib/php.rb'
 require ENV['TM_SUPPORT_PATH'] + '/lib/ui'
 require ENV['TM_SUPPORT_PATH'] + '/lib/exit_codes'
+
+def initialize_project()
+  dir = ENV['TM_PROJECT_DIRECTORY']+'/'
+  uri = URI('http://127.0.0.1:8787/')
+  name = File.basename(ENV['TM_PROJECT_DIRECTORY']) || ENV['TM_DISPLAYNAME']
+
+  http = Net::HTTP.new(uri.host, uri.port)
+  req = Net::HTTP::Post.new(uri.path, 'Content-Type' =&gt; 'application/json')
+  req.body = { 'method' =&gt; 'initialize', 'body' =&gt; { 'dir' =&gt; dir, 'name' =&gt; name }}.to_json
+  res = http.request(req)
+  json = JSON.parse res.body
+  if json['result'] == "error"
+    TextMate.exit_show_tool_tip(json['message'])
+    return
+  end
+rescue =&gt; _
+  # TextMate.exit_show_tool_tip "failed #{e}"
+  return
+end
 
 def did_open(file)
     document = []
@@ -43,6 +61,13 @@ def did_open(file)
     json = JSON.parse res.body
     if json['result'] == "error"
       return
+    end
+    if json['result'] == "ok"
+      return
+    end
+    system(ENV['TM_MATE'], "--uuid", ENV['TM_DOCUMENT_UUID'], "--clear-mark=note", "--clear-mark=warning", "--clear-mark=error")
+    json['result'].each do |line|
+      setMark(line)
     end
 rescue =&gt; e
     return "failed #{e}"
@@ -78,6 +103,32 @@ class String
     gsub(' ', '&amp;nbsp;')
   end
 end
+
+def getIcon(severity)
+  case severity
+  when 4
+    return 'note'
+  when 3
+    return 'warning'
+  end
+  return 'error'
+end
+
+def setMark(line)
+  range = line['range']
+  unless range['start']['line'].nil?
+    lineno = range['start']['line']+1
+    column = range['start']['character']+1
+    icon = getIcon(line['severity'])
+    message = line['message']
+    tm_args = ["--uuid", ENV['TM_DOCUMENT_UUID'], "--line=#{lineno}:#{column || '1'}", "--set-mark=#{icon}:#{message}"]
+    system(ENV['TM_MATE'], *tm_args)
+  end
+rescue =&gt; e
+  TextMate.exit_show_tool_tip "failed #{e}"
+end
+
+initialize_project()
 
 result = get_definition(ENV['TM_FILEPATH'], ENV['TM_LINE_NUMBER'].to_i-1, ENV['TM_LINE_INDEX'].to_i-1)
 if result.length &gt; 0

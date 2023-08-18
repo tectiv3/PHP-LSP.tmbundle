@@ -24,13 +24,11 @@ def initialize_project()
 
   http = Net::HTTP.new(uri.host, uri.port)
   req = Net::HTTP::Post.new(uri.path, 'Content-Type' =&gt; 'application/json')
-  req.body = { 'method' =&gt; 'initialize', 'body' =&gt; { 'dir' =&gt; dir, 'name' =&gt; name,
-      'storage' =&gt; "/tmp/intelephense/" }}.to_json
+  req.body = { 'method' =&gt; 'initialize', 'body' =&gt; { 'dir' =&gt; dir, 'name' =&gt; name }}.to_json
   res = http.request(req)
   json = JSON.parse res.body
   if json['result'] == "error"
-    # TextMate.exit_show_tool_tip(json['message'])
-    return
+    TextMate.exit_show_tool_tip(json['message'])
   end
 rescue =&gt; _
   # TextMate.exit_show_tool_tip "failed #{e}"
@@ -89,8 +87,9 @@ rescue =&gt; e
   TextMate.exit_show_tool_tip "failed #{e}"
 end
 
+# TextMate.exit_show_tool_tip ENV['TM_FILEPATH']
 initialize_project()
-# did_open(ENV['TM_FILEPATH'])
+did_open(ENV['TM_FILEPATH'])
 
 # puts "opened " + ENV['TM_FILEPATH']</string>
 	<key>input</key>
