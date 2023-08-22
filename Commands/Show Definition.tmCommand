@@ -56,7 +56,7 @@ def did_open(file)
     http = Net::HTTP.new(uri.host, uri.port)
     req = Net::HTTP::Post.new(uri.path, 'Content-Type' =&gt; 'application/json')
     req.body = {'method' =&gt; 'didOpen', 'body' =&gt; { 'uri' =&gt; "file://" + file, 
-        "languageId" =&gt; "php", "text" =&gt; text}}.to_json
+        "languageId" =&gt; File.extname(file).strip.downcase[1..-1], "text" =&gt; text}}.to_json
     res = http.request(req)
     json = JSON.parse res.body
     if json['result'] == "error"
@@ -78,7 +78,12 @@ def get_definition(file, line, char)
     uri = URI('http://127.0.0.1:8787/')
     http = Net::HTTP.new(uri.host, uri.port)
     req = Net::HTTP::Post.new(uri.path, 'Content-Type' =&gt; 'application/json')
-    req.body = {method: 'hover', body: {textDocument: { uri: "file://" + file}, position: {line: line, character: char}}}.to_json
+    req.body = {
+      method: 'hover',
+      body: {
+       languageId: File.extname(file).strip.downcase[1..-1],
+       textDocument: { uri: "file://" + file},
+       position: {line: line, character: char}}}.to_json
     res = http.request(req)
     json = JSON.parse res.body
     if json['result'] == "error"
@@ -245,7 +250,7 @@ get_builtin_definition()</string>
 	<key>outputLocation</key>
 	<string>toolTip</string>
 	<key>scope</key>
-	<string>source.php</string>
+	<string>source.php,text.html.vue</string>
 	<key>uuid</key>
 	<string>8BDB58A3-937F-479A-B4DB-691CECE83040</string>
 	<key>version</key>

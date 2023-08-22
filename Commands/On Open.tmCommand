@@ -48,7 +48,7 @@ def did_open(file)
     http = Net::HTTP.new(uri.host, uri.port)
     req = Net::HTTP::Post.new(uri.path, 'Content-Type' =&gt; 'application/json')
     req.body = {'method' =&gt; 'didOpen', 'body' =&gt; { 'uri' =&gt; "file://" + file, 
-        "languageId" =&gt; "php", "version" =&gt; (rand() * 10).to_i, "text" =&gt; text}}.to_json
+        "languageId" =&gt; File.extname(file).strip.downcase[1..-1], "version" =&gt; (rand() * 10).to_i, "text" =&gt; text}}.to_json
     res = http.request(req)
     json = JSON.parse res.body
     if json['result'] == "error"
@@ -105,7 +105,7 @@ did_open(ENV['TM_FILEPATH'])
 	<key>outputLocation</key>
 	<string>discard</string>
 	<key>scope</key>
-	<string>source.php</string>
+	<string>source.php,text.html.vue</string>
 	<key>semanticClass</key>
 	<string>callback.document.did-open</string>
 	<key>uuid</key>

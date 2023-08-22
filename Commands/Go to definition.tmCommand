@@ -32,7 +32,7 @@ def did_open(file)
     http = Net::HTTP.new(uri.host, uri.port)
     req = Net::HTTP::Post.new(uri.path, 'Content-Type' =&gt; 'application/json')
     req.body = {'method' =&gt; 'didOpen', 'body' =&gt; { 'uri' =&gt; "file://" + file, 
-        "languageId" =&gt; "php", "text" =&gt; text}}.to_json
+        "languageId" =&gt; File.extname(file).strip.downcase[1..-1], "text" =&gt; text}}.to_json
     res = http.request(req)
     json = JSON.parse res.body
     if json['result'] == "error"
@@ -47,7 +47,14 @@ def get_location(file, line, char)
     uri = URI('http://127.0.0.1:8787/')
     http = Net::HTTP.new(uri.host, uri.port)
     req = Net::HTTP::Post.new(uri.path, 'Content-Type' =&gt; 'application/json')
-    req.body = {method: 'definition', body: {textDocument: { uri: "file://" + file}, position: {line: line, character: char}}}.to_json
+    ext = File.extname(file).strip.downcase[1..-1]
+    req.body = {
+      method: 'definition', 
+      body: {
+        languageId: ext,
+        textDocument: { uri: "file://" + file}, position: {line: line, character: char}
+      }
+    }.to_json
     res = http.request(req)
     json = JSON.parse res.body
     result = json['result']
@@ -55,15 +62,25 @@ def get_location(file, line, char)
       return json['message']
     end
     result = result.kind_of?(Array) ? result[0] : result
-    file = (result['uri'].sub! 'file://', '')
-    return TextMate.go_to(:file =&gt; file,
-                   :line =&gt; result['range']['start']['line']+1,
-                   :column =&gt; result['range']['start']['character']+1)
+    
+    if (ext == 'vue')
+      targetFile = (result['targetUri'].sub! 'file://', '')
+      targetLine = result['targetRange']['start']['line']+1
+      targetCol  = result['targetRange']['start']['character']+1
+    else
+      targetFile = (result['uri'].sub! 'file://', '')
+      targetLine = result['range']['start']['line']+1
+      targetCol  = result['range']['start']['character']+1
+    end
+    
+    return TextMate.go_to(:file =&gt; targetFile,
+                   :line =&gt; targetLine,
+                   :column =&gt; targetCol)
 rescue =&gt; e
     return "failed #{e}"
 end
 
-TextMate.save_if_untitled('php')
+TextMate.save_if_untitled(File.extname(ENV['TM_FILEPATH']).strip.downcase[1..-1])
 
 result = get_location(ENV['TM_FILEPATH'], ENV['TM_LINE_NUMBER'].to_i-1, ENV['TM_LINE_INDEX'].to_i-1)
 
@@ -83,7 +100,7 @@ TextMate.exit_show_tool_tip(result)</string>
 	<key>outputLocation</key>
 	<string>toolTip</string>
 	<key>scope</key>
-	<string>source.php</string>
+	<string>source.php,text.html.vue</string>
 	<key>uuid</key>
 	<string>167F2E72-602D-43A5-93EB-EF5FC4042BEF</string>
 	<key>version</key>

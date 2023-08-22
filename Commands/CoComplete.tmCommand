@@ -58,10 +58,6 @@ def get_completion(file, lineNum, char)
     req = Net::HTTP::Post.new(uri.path, 'Content-Type' =&gt; 'application/json')
     ext = File.extname(ENV['TM_FILEPATH']).strip.downcase[1..-1]
 
-    # FIXME: don't know why but textmate reports wrong col number for go files
-    if ext == 'go'
-      char = char / 2 - 1
-    end
     req.body = {
       'method': 'getCompletions', 
       'body': { 
