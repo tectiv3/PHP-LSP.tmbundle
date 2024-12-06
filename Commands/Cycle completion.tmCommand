@@ -6,14 +6,21 @@
 	<string>nop</string>
 	<key>command</key>
 	<string>#!/usr/bin/env ruby -wU
+# encoding: utf-8
 
-if ENV['TM_ENABLE_IS'] != 'true'
-  return
-end
+# if ENV['TM_ENABLE_IS'] != 'true'
+#   return
+# end
 
 require 'net/http'
 require 'json'
 
+SUPPORT = ENV['TM_SUPPORT_PATH']
+DIALOG = SUPPORT + '/bin/tm_dialog'
+
+require SUPPORT + '/lib/escape'
+
+require ENV['TM_BUNDLE_SUPPORT'] + '/lib/php.rb'
 require ENV['TM_SUPPORT_PATH'] + '/lib/ui'
 require ENV['TM_SUPPORT_PATH'] + '/lib/exit_codes'
 
@@ -29,13 +36,14 @@ def initialize_project()
   json = JSON.parse res.body
   if json['result'] == "error"
     TextMate.exit_show_tool_tip(json['message'])
+    return
   end
-rescue =&gt; e
-  TextMate.exit_show_tool_tip "failed #{e}"
+rescue =&gt; _
+  # TextMate.exit_show_tool_tip "failed #{e}"
+  return
 end
 
-def did_open(file)
-    initialize_project()
+def get_completion(file, lineNum, char)
     document = []
     while line = $stdin.gets
       document.push(line)
@@ -44,72 +52,51 @@ def did_open(file)
     if text.length &gt; 1000000
       TextMate.exit_show_tool_tip("File is too big, ignoring...")
     end
+
     uri = URI('http://127.0.0.1:8787/')
     http = Net::HTTP.new(uri.host, uri.port)
     req = Net::HTTP::Post.new(uri.path, 'Content-Type' =&gt; 'application/json')
-    req.body = {'method' =&gt; 'didOpen', 'body' =&gt; { 'uri' =&gt; "file://" + file, 
-        "languageId" =&gt; File.extname(file).strip.downcase[1..-1], "version" =&gt; (rand() * 10).to_i, "text" =&gt; text}}.to_json
+    ext = File.extname(ENV['TM_FILEPATH']).strip.downcase[1..-1]
+
+    req.body = {
+      'method': 'getCompletionsCycling', 
+      'body': { 
+        'uri': file, 
+        'languageId' =&gt; ext,
+        'text' =&gt; text, 
+        'position': {line: lineNum, character: char}
+      }
+    }.to_json
     res = http.request(req)
     json = JSON.parse res.body
     if json['result'] == "error"
-      return
+      TextMate.exit_show_tool_tip(json['message'])
     end
-    if json['result'] == "ok"
-      return
+    if json['result'] == "No completions"
+      TextMate.exit_show_tool_tip(json['result'])
     end
-    system(ENV['TM_MATE'], "--uuid", ENV['TM_DOCUMENT_UUID'], "--clear-mark=note", "--clear-mark=warning", "--clear-mark=error")
-    json['result'].each do |line|
-      setMark(line)
-    end
+    return json['result']
 rescue =&gt; e
     TextMate.exit_show_tool_tip "failed #{e}"
 end
 
-def getIcon(severity)
-  case severity
-  when 4
-    return 'note'
-  when 3
-    return 'warning'
-  end
-  return 'error'
-end
-
-def setMark(line)
-  range = line['range']
-  unless range['start']['line'].nil?
-    lineno = range['start']['line']+1
-    column = range['start']['character']+1
-    icon = getIcon(line['severity'])
-    message = line['message']
-    tm_args = ["--uuid", ENV['TM_DOCUMENT_UUID'], "--line=#{lineno}:#{column || '1'}", "--set-mark=#{icon}:#{message}"]
-    system(ENV['TM_MATE'], *tm_args)
-  end
-rescue =&gt; e
-  TextMate.exit_show_tool_tip "failed #{e}"
-end
-
-did_open(ENV['TM_FILEPATH'])
-
-# puts "opened " + ENV['TM_FILEPATH']</string>
+print get_completion(ENV['TM_FILEPATH'], ENV['TM_LINE_NUMBER'].to_i-1, ENV['TM_COLUMN_NUMBER'].to_i-1)</string>
 	<key>input</key>
-	<string>document</string>
+	<string>selection</string>
 	<key>inputFormat</key>
 	<string>text</string>
+	<key>keyEquivalent</key>
+	<string>~@]</string>
 	<key>name</key>
-	<string>On Save</string>
+	<string>Cycle completion</string>
 	<key>outputCaret</key>
-	<string>afterOutput</string>
+	<string>selectOutput</string>
 	<key>outputFormat</key>
 	<string>text</string>
 	<key>outputLocation</key>
-	<string>discard</string>
-	<key>scope</key>
-	<string>source.php,source.go</string>
-	<key>semanticClass</key>
-	<string>callback.document.will-save</string>
+	<string>replaceSelection</string>
 	<key>uuid</key>
-	<string>34EC1ABE-ED99-4B78-B193-CBBBAB0EC28A</string>
+	<string>CB4D791B-AC72-414E-9E73-8AA292AE5A46</string>
 	<key>version</key>
 	<integer>2</integer>
 </dict>

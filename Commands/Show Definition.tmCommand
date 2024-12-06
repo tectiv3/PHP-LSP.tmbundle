@@ -250,7 +250,7 @@ get_builtin_definition()</string>
 	<key>outputLocation</key>
 	<string>toolTip</string>
 	<key>scope</key>
-	<string>source.php,text.html.vue</string>
+	<string>source.php,source.go</string>
 	<key>uuid</key>
 	<string>8BDB58A3-937F-479A-B4DB-691CECE83040</string>
 	<key>version</key>

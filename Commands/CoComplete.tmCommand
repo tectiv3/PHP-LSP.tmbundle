@@ -92,7 +92,7 @@ print get_completion(ENV['TM_FILEPATH'], ENV['TM_LINE_NUMBER'].to_i-1, ENV['TM_C
 	<key>name</key>
 	<string>Copilot</string>
 	<key>outputCaret</key>
-	<string>interpolateByLine</string>
+	<string>selectOutput</string>
 	<key>outputFormat</key>
 	<string>text</string>
 	<key>outputLocation</key>

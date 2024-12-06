@@ -105,7 +105,7 @@ did_open(ENV['TM_FILEPATH'])
 	<key>outputLocation</key>
 	<string>discard</string>
 	<key>scope</key>
-	<string>source.php,text.html.vue</string>
+	<string>source.php,source.go</string>
 	<key>semanticClass</key>
 	<string>callback.document.did-open</string>
 	<key>uuid</key>
