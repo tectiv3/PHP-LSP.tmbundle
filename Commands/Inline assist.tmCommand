@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>beforeRunningCommand</key>
+	<string>nop</string>
+	<key>command</key>
+	<string>#!/usr/bin/env ruby
+# encoding: utf-8
+
+libdir = ENV['TM_BUNDLE_SUPPORT'] + '/lib/'
+$LOAD_PATH.unshift(libdir) unless $LOAD_PATH.include?(libdir)
+
+SUPPORT = ENV['TM_SUPPORT_PATH']
+require SUPPORT + '/lib/textmate'
+require SUPPORT + '/lib/ui'
+DIALOG = SUPPORT + '/bin/tm_dialog'
+
+document = []
+while line = $stdin.gets
+  document.push(line)
+end
+text = document.join
+
+# Get prompt from user
+u_prompt = TextMate::UI.request_string(
+  :title =&gt; "Prompt",
+  :prompt =&gt; "Enter a prompt for assistant"
+)
+s_prompt = "ALWAYS! Only output the requested code changes. Never add explanations or provide any other output on the matter. It is imperative that you provide user with requested code changes and only that."
+
+# Check if prompt entered
+TextMate.exit_show_tool_tip("No prompt provided") if u_prompt.nil? || u_prompt.empty?
+
+full_text = "#{u_prompt}\n\n#{text}"
+
+# Execute command and capture output 
+output = IO.popen(['llm', '-m', 'phi4', '-s', s_prompt, '-x'], 'r+') do |io|
+  io.puts full_text
+  io.close_write
+  io.read
+end
+
+# Handle errors
+if $?.success?
+  print output 
+else
+  TextMate.exit_show_tool_tip("Error: #{output}")
+end</string>
+	<key>input</key>
+	<string>selection</string>
+	<key>inputFormat</key>
+	<string>text</string>
+	<key>keyEquivalent</key>
+	<string>~@p</string>
+	<key>name</key>
+	<string>Inline assist</string>
+	<key>outputCaret</key>
+	<string>selectOutput</string>
+	<key>outputFormat</key>
+	<string>text</string>
+	<key>outputLocation</key>
+	<string>replaceInput</string>
+	<key>uuid</key>
+	<string>5A34AFCC-0764-474A-B506-9FDA440F8ADD</string>
+	<key>version</key>
+	<integer>2</integer>
+</dict>
+</plist>
