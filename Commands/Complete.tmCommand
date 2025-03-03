@@ -37,7 +37,7 @@ def did_open(file)
     http = Net::HTTP.new(uri.host, uri.port)
     req = Net::HTTP::Post.new(uri.path, 'Content-Type' =&gt; 'application/json')
     req.body = {'method' =&gt; 'didOpen', 'body' =&gt; { 'uri' =&gt; "file://" + file, 
-        "languageId" =&gt; "php", "text" =&gt; text}}.to_json
+        "languageId" =&gt; File.extname(file).strip.downcase[1..-1], "text" =&gt; text}}.to_json
     res = http.request(req)
     json = JSON.parse res.body
     if json['result'] == "error"
@@ -53,7 +53,9 @@ def get_completion(file, line, char, last_char)
     uri = URI('http://127.0.0.1:8787/')
     http = Net::HTTP.new(uri.host, uri.port)
     req = Net::HTTP::Post.new(uri.path, 'Content-Type' =&gt; 'application/json')
-    req.body = {'method' =&gt; 'completion', 'body' =&gt; { 'textDocument' =&gt; { 'uri' =&gt; "file://" + file}, 'position' =&gt; {'line' =&gt; line, 'character' =&gt; char}, 'context' =&gt; { 'triggerKind' =&gt; 1 }}}.to_json
+    req.body = {'method' =&gt; 'completion', 'body' =&gt; { 
+      "languageId" =&gt; File.extname(file).strip.downcase[1..-1],
+      'textDocument' =&gt; { 'uri' =&gt; "file://" + file}, 'position' =&gt; {'line' =&gt; line, 'character' =&gt; char}, 'context' =&gt; { 'triggerKind' =&gt; 1 }}}.to_json
     res = http.request(req)
     json = JSON.parse res.body
     result = json['result']
